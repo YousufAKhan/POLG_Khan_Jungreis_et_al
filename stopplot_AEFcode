@@ -1,0 +1,82 @@
+#!/bin/csh
+
+#First sequence goes at bottom of stopplot. RefSeq not reordered.
+
+@ argc = `echo $argv | awk '{print NF}'`
+if ($argc != 2) then
+  echo "Usage: stopplot alignment output_prefix"
+  exit 1
+endif
+
+set alignment = $1
+set prefix = $2
+set p2 = t7888gh
+
+set test = 0
+foreach i (seq2aln seqret)
+  if (! -X $i) then
+    echo "Can't find software '$i'."
+    set test = 1
+  endif
+end
+if ($test) then
+  exit 1
+endif
+
+if (! -r $alignment) then
+  echo "Can't find file '$alignment'."
+  exit 1
+endif
+
+#Outputs nt coords of all nt gaps, and nt coord of central nt of each stop 
+#  codon triplet.
+seqret $alignment $p2.temp1 -auto
+@ count = 0
+foreach file (gaps stops.0 stops.1 stops.2)
+  rm -f $prefix.$file.txt
+  touch $prefix.$file.txt
+end
+foreach line (`awk -v ORS="@" '{print $0}' $p2.temp1 | sed 's/>/\n/g' | \
+  grep "@" | sed 's/@/:/' | sed 's/@//g'`)
+  @ count += 1
+  set name = `echo $line | awk -F: '{print $1}'`
+  set seq  = `echo $line | awk -F: '{print $2}'`
+  echo $seq | sed 's/./&\n/g' | grep "." | awk '{print NR,$1}' | grep "-" | \
+    awk '{print "'"$count"'",$1,"'"$name"'"}' >> $prefix.gaps.txt
+  echo $line | awk -F":" '{printf ">%s\n%s\n",$1,$2}' > $p2.temp2
+  degapseq $p2.temp2 $p2.temp3 -auto
+  tail -n +2 $p2.temp3 | awk -v ORS="" '{print $0}' | \
+    sed 's/[a-z]/\U&/g' | sed 's/T/U/g' | sed 's/[A-Z][A-Z][A-Z]/& /g' | \
+    sed 's/UAG/x@x/g' |sed 's/UAA/x@x/g' |sed 's/UGA/x@x/g' | sed 's/ //g' | \
+    sed 's/./&\n/g' | grep "." | awk '{print NR,$1}' | grep "@" | \
+    awk '{print $1}' > $p2.temp4.0
+  tail -n +2 $p2.temp3 | awk -v ORS="" '{print $0}' | sed 's/^./& /' | \
+    sed 's/[a-z]/\U&/g' | sed 's/T/U/g' | sed 's/[A-Z][A-Z][A-Z]/& /g' | \
+    sed 's/UAG/x@x/g' |sed 's/UAA/x@x/g' |sed 's/UGA/x@x/g' | sed 's/ //g' | \
+    sed 's/./&\n/g' | grep "." | awk '{print NR,$1}' | grep "@" | \
+    awk '{print $1}' > $p2.temp4.1
+  tail -n +2 $p2.temp3 | awk -v ORS="" '{print $0}' | sed 's/^../& /' | \
+    sed 's/[a-z]/\U&/g' | sed 's/T/U/g' | sed 's/[A-Z][A-Z][A-Z]/& /g' | \
+    sed 's/UAG/x@x/g' |sed 's/UAA/x@x/g' |sed 's/UGA/x@x/g' | sed 's/ //g' | \
+    sed 's/./&\n/g' | grep "." | awk '{print NR,$1}' | grep "@" | \
+    awk '{print $1}' > $p2.temp4.2
+  tail -n +2 $p2.temp2 | awk -v ORS="" '{print $0}' | sed 's/./&\n/g' | \
+    grep "." | sed 's/-/0/' | sed 's/[^0]/1/' | \
+    awk '{n+=$1}{printf "@%s@ %s\n", n,NR}' > $p2.temp5
+  foreach j (`cat $p2.temp4.0`)
+    grep -m 1 "@$j@" $p2.temp5 | awk '{print "'"$count"'",$2,"'"$name"'"}' \
+      >> $prefix.stops.0.txt
+  end
+  foreach j (`cat $p2.temp4.1`)
+    grep -m 1 "@$j@" $p2.temp5 | awk '{print "'"$count"'",$2,"'"$name"'"}' \
+      >> $prefix.stops.1.txt
+  end
+  foreach j (`cat $p2.temp4.2`)
+    grep -m 1 "@$j@" $p2.temp5 | awk '{print "'"$count"'",$2,"'"$name"'"}' \
+      >> $prefix.stops.2.txt
+  end
+  rm -f $p2.temp2 $p2.temp3 $p2.temp4.0 $p2.temp4.1 $p2.temp4.2 $p2.temp5
+end
+rm -f t7888gh.temp1
+
+
